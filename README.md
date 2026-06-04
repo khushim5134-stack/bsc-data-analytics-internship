@@ -125,3 +125,98 @@ Built a GUI-based automation tool using Python that:
 - CRM_MTD_Performance_Reporting_Durex.ipynb
 - CRM_MTD_Performance_Reporting_Avon,Enamor,Neurogum_Brands.ipynb
 
+
+# Project 3 - Flow Analytics Automation
+
+## Overview
+
+Developed a Python-based automation system to track and analyze CRM flow performance across multiple brands. The solution consolidates engagement, session, order, and revenue data from multiple sources and automatically updates centralized Google Sheets for reporting and performance monitoring.
+
+## Business Problem
+
+* Multiple CRM flows were running simultaneously across brands.
+* Flow performance tracking required manual consolidation from different source files.
+* Sessions, orders, revenue, and engagement metrics had to be calculated separately.
+* Reporting was time-consuming and prone to manual errors.
+* Tracking performance across different date ranges lacked flexibility.
+
+## Solution
+
+Built a GUI-based automation tool using Python that:
+
+* Processes engagement data from KwikEngage/Tellephant exports.
+* Maps flows using a centralized Flow Mapping Sheet.
+* Calculates engagement, traffic, and conversion metrics automatically.
+* Supports flexible date-range reporting.
+* Updates Google Sheets dashboards automatically.
+* Tracks Meta template category changes through Gmail integration.
+
+## Key Features
+
+* Multi-brand support (Durex, Avon, Enamor, Neurogum)
+* Flexible date-range reporting
+* Automated flow mapping
+* Engagement metrics automation
+* Session tracking
+* Order and revenue attribution
+* Google Sheets integration
+* Gmail integration for Meta alerts
+* Marketing vs Utility flow classification
+* Automated KPI calculations
+
+## Metrics Generated
+
+### Engagement Metrics
+
+* Total Sent
+* Delivered
+* Delivery Rate
+* Opens
+* Open Rate
+* Clicks
+* Click Rate
+
+### Traffic Metrics
+
+* Sessions
+
+### Conversion Metrics
+
+* Orders
+* Revenue
+
+### Business Metrics
+
+* CVR
+* AOV
+* ROAS
+
+### Monitoring Metrics
+
+* Meta Template Category Alerts
+
+## Tech Stack
+
+* Python
+* Pandas
+* NumPy
+* Tkinter
+* GSpread
+* Google Sheets API
+* Gmail API
+
+## Business Impact
+
+* Eliminated manual flow reporting effort.
+* Standardized flow performance tracking across brands.
+* Reduced reporting errors and inconsistencies.
+* Enabled flexible reporting for any date range.
+* Automated KPI generation and dashboard updates.
+* Improved visibility into CRM flow performance.
+* Introduced proactive monitoring of Meta template category changes.
+
+## Files
+
+* Flow_Analytics_Automation.ipynb
+
+
