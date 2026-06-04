@@ -220,3 +220,126 @@ Built a GUI-based automation tool using Python that:
 * Flow_Analytics_Automation.ipynb
 
 
+# Project 4 - CRM Send-Time Optimization Heatmap
+
+## Overview
+
+Developed a data-driven CRM send-time optimization framework to identify high-performing campaign delivery windows across multiple brands. The project analyzed historical CRM campaign performance data to determine the optimal day and time combinations that maximize Click-Through Rate (CTR) and improve overall engagement.
+
+## Business Problem
+
+* CRM campaigns were scheduled primarily based on intuition and historical practices.
+* No structured methodology existed to determine optimal send times.
+* High-intent engagement windows remained unidentified.
+* Campaign performance varied significantly across brands and time slots.
+* Suboptimal scheduling resulted in lower engagement and CTR.
+
+## Solution
+
+Built an analytical framework that:
+
+* Processed historical CRM campaign performance data.
+* Evaluated campaigns using CTR as the primary optimization metric.
+* Created Day × Time Slot performance heatmaps.
+* Compared performance patterns across brands.
+* Identified high-intent engagement windows.
+* Generated brand-specific scheduling recommendations.
+
+## Key Features
+
+* Historical campaign performance analysis.
+* Day-wise performance evaluation.
+* Time-slot level CTR analysis.
+* Brand-specific optimization insights.
+* Performance normalization across campaigns.
+* Heatmap-based visualization.
+* Send-time recommendation framework.
+* Cross-brand comparative analysis.
+
+## Brands Analyzed
+
+* Avon
+* Durex
+* Neurogum
+* Enamor
+
+## Analysis Framework
+
+### Funnel Evaluation
+
+Campaign performance was evaluated across:
+
+* Sent
+* Delivered
+* Open
+* CTR
+* CVR
+
+### Optimization Metric
+
+Primary metric used:
+
+* Click Through Rate (CTR)
+
+Secondary metrics considered:
+
+* Open Rate
+* Conversion Rate (CVR)
+* Delivery Performance
+
+## Key Insights
+
+### Avon
+
+* Peak engagement observed during Monday evening campaigns.
+* Weekend campaigns demonstrated stronger performance.
+* Higher purchase intent identified during evening slots.
+
+### Durex
+
+* Evening campaigns consistently outperformed other time windows.
+* Sunday evenings generated the highest CTR.
+* Clear late-day engagement behavior observed.
+
+### Neurogum
+
+* Afternoon campaigns delivered the most consistent performance.
+* Friday afternoon emerged as the strongest engagement period.
+* Stable weekday engagement trend identified.
+
+### Enamor
+
+* Early-week morning campaigns showed the strongest results.
+* Midweek engagement remained stable.
+* Recovery trend observed toward Friday.
+
+## Business Impact
+
+* Shifted campaign planning from intuition to data-driven scheduling.
+* Improved CTR through optimized send-time selection.
+* Increased campaign efficiency without additional marketing spend.
+* Enabled brand-specific CRM execution strategies.
+* Improved decision-making through measurable performance insights.
+
+## Tech Stack
+
+* Python
+* Pandas
+* NumPy
+* Matplotlib
+* Seaborn
+* Excel
+* Google Sheets
+
+## Strategic Outcome
+
+The project established a repeatable framework for CRM send-time optimization, enabling brands to schedule campaigns during high-intent engagement windows and consistently improve user interaction rates through data-backed decision making.
+
+## Files
+
+* Durex_Heatmap_Code.ipynb
+* Neurogum_Heatmap_Code.ipynb
+* Avon_Heatmap_Code.ipynb
+* Enamor_Heatmap_Code.ipynb
+
+
