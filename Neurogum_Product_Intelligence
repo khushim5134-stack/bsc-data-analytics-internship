@@ -1,0 +1,1529 @@
+import pandas as pd
+import re
+import html
+import os
+
+import tkinter as tk
+from tkinter import filedialog
+from tkinter import messagebox
+
+
+# =========================
+# FLAVOR EXTRACTION
+# =========================
+FLAVOR_MASTER = [
+        "peppermint",
+        "cinnamon",
+        "iced coffee"
+    ]
+
+
+
+DEFAULT_PRICE_SHEET = (
+    r"C:\Users\HP\Documents\Neuro Price Sheet.xlsx")
+# =========================
+# LOAD SOURCE FILE
+# =========================
+def generate_report():
+  global FLAVOR_MASTER
+  new_flavors = flavor_entry.get().strip()
+  if new_flavors:
+      for flavor in new_flavors.split(","):
+          flavor = flavor.strip().lower()
+          if (
+            flavor
+            and flavor not in FLAVOR_MASTER
+        ):
+            FLAVOR_MASTER.append(flavor)
+
+  print("Textbox Value:")
+  print(flavor_entry.get())
+
+  print("Active Flavors:")
+  print(FLAVOR_MASTER)
+  file_path = selected_source_file.get()
+
+  file_extension = (
+      os.path.splitext(file_path)[1]
+      .lower()
+  )
+
+  if file_extension == ".csv":
+
+      df = pd.read_csv(
+          file_path,
+          low_memory=False
+      )
+
+  elif file_extension in [
+      ".xlsx",
+      ".xls"
+  ]:
+
+      df = pd.read_excel(
+          file_path
+      )
+
+  else:
+
+      raise ValueError(
+          f"Unsupported file type: {file_extension}"
+      )
+
+  # =========================
+  # CLEAN COLUMN NAMES
+  # =========================
+  df.columns = df.columns.str.strip()
+
+  # =========================
+  # IDENTIFY COLUMNS
+  # =========================
+  utm_col = [
+      c for c in df.columns
+      if "utm" in c.lower()
+      and "source" in c.lower()
+  ][0]
+
+  # =========================
+  # PRODUCT COLUMN
+  # =========================
+  possible_product_cols = [
+      "Product Name",
+      "Value"
+  ]
+
+  product_col = None
+
+  for col in possible_product_cols:
+
+      if col in df.columns:
+          product_col = col
+          break
+
+  if product_col is None:
+      raise ValueError(
+          "No product column found"
+      )
+
+  # =========================
+  # CLEAN UTM SOURCE
+  # =========================
+  df[utm_col] = (
+      df[utm_col]
+      .astype(str)
+      .str.strip()
+      .str.lower()
+  )
+
+  # =========================
+  # CRM SOURCES
+  # =========================
+  crm_sources = [
+      "bik",
+      "cem",
+      "crm",
+      "crn",
+      "kwikchat",
+      "kwikengage",
+      "sms",
+      "tcway_crm",
+      "wa",
+      "whatsapp",
+      "whatsapp_order_shipped"
+  ]
+
+  # =========================
+  # CRM FILTER
+  # =========================
+  df = df[
+      df[utm_col].isin(crm_sources)
+  ].copy()
+
+  # =========================
+  # CLEAN GRAND TOTAL
+  # =========================
+  df["Grand Total"] = (
+      df["Grand Total"]
+      .astype(str)
+      .str.replace(",", "", regex=False)
+      .str.replace("₹", "", regex=False)
+      .str.strip()
+  )
+
+  df["Grand Total"] = pd.to_numeric(
+      df["Grand Total"],
+      errors="coerce"
+  )
+
+
+ 
+
+  # =========================
+  # SPLIT MULTIPLE PRODUCTS
+  # =========================
+  df[product_col] = (
+      df[product_col]
+      .astype(str)
+  )
+
+  # one product per row
+  df_expanded = (
+      df.assign(
+          **{
+              product_col:
+              df[product_col]
+              .str.split("|")
+          }
+      )
+      .explode(product_col)
+  )
+
+  # =========================
+  # CLEAN PRODUCTS
+  # =========================
+  df_expanded[product_col] = (
+      df_expanded[product_col]
+      .str.strip()
+  )
+
+  df_expanded[product_col] = (
+      df_expanded[product_col]
+      .apply(html.unescape)
+  )
+
+  # =========================
+  # PRODUCT STANDARDIZATION
+  # =========================
+  def correct_product_name(name):
+
+      original_name = str(name)
+
+      # -------------------------
+      # BASIC CLEANING
+      # -------------------------
+      name = html.unescape(original_name)
+
+      name = name.lower()
+
+      name = re.sub(
+          r"[,:_/()]",
+          " ",
+          name
+      )
+
+      name = re.sub(
+          r"\s+",
+          " ",
+          name
+      ).strip()
+
+      # =========================
+      # BASE PRODUCT
+      # =========================
+
+      assorted_type = ""
+
+      # ASSORTED
+      if "assorted" in name:
+
+          base_name = "Neuro Assorted"
+
+          has_mints = "mints" in name
+          has_gums = "gums" in name
+
+          if has_mints and has_gums:
+              assorted_type = "Mints & Gums"
+
+          elif has_mints:
+              assorted_type = "Mints"
+
+          elif has_gums:
+              assorted_type = "Gums"
+
+      # MINTS
+      elif "mints" in name:
+
+          if (
+              "energy" in name
+              or "focus" in name
+              or "caffeine" in name
+          ):
+
+              base_name = (
+                  "Neuro Energy & "
+                  "Focus Caffeine Mints"
+              )
+
+          else:
+              base_name = "Neuro Mints"
+
+      # GUMS
+      elif "gums" in name:
+
+          if (
+              "energy" in name
+              or "focus" in name
+              or "caffeine" in name
+          ):
+
+              base_name = (
+                  "Neuro Energy & "
+                  "Focus Caffeine Gums"
+              )
+
+          else:
+              base_name = "Neuro Gums"
+
+      else:
+
+          return pd.Series(
+          [
+              None,
+              None,
+              None
+          ]
+      )
+
+  
+      detected_flavors = []
+
+      for flavor in FLAVOR_MASTER:
+
+          if flavor in name:
+              detected_flavors.append(flavor)
+
+      # remove backend error products
+
+
+      if len(detected_flavors) > 1:
+
+        return pd.Series(
+          [
+              None,
+              None,
+              None
+          ]
+      )
+
+      flavor_found = ""
+
+      if len(detected_flavors) == 1:
+
+          flavor_found = (
+              detected_flavors[0]
+              .title()
+          )
+
+      # =========================
+      # SIZE EXTRACTION
+      # =========================
+      size_parts = []
+
+      # PACK
+      pack_match = re.search(
+          r"pack of \d+",
+          name
+      )
+
+      if pack_match:
+
+          size_parts.append(
+              pack_match.group().title()
+          )
+
+      # PRIORITY QUANTITY
+      priority_quantity_match = re.search(
+          r"pack of \d+\s+(\d+\s*(pieces|gums|mints|pcs))",
+          name
+      )
+
+      quantity_text = ""
+
+      if priority_quantity_match:
+
+          quantity_text = (
+              priority_quantity_match
+              .group(1)
+              .title()
+          )
+
+      else:
+
+          quantity_match = re.search(
+              r"(\d+\s*(pieces|gums|mints|pcs))",
+              name
+          )
+
+          if quantity_match:
+
+              quantity_text = (
+                  quantity_match
+                  .group(1)
+                  .title()
+              )
+
+      # add brackets
+      if quantity_text:
+
+          quantity_text = (
+              f"({quantity_text})"
+          )
+
+          size_parts.append(quantity_text)
+
+      # SACHETS
+      sachet_match = re.search(
+          r"\d+\s*x\s*\d+\s*(gum|mint)?\s*sachets?",
+          name
+      )
+
+      if sachet_match:
+
+          size_parts.append(
+              sachet_match.group().title()
+          )
+
+      # combine size
+      size_text = (
+          " ".join(size_parts)
+          .strip()
+      )
+
+      # =========================
+      # FINAL NAME
+      # =========================
+      final_name = base_name
+
+      if size_text:
+          final_name += (
+              f" - {size_text}"
+          )
+
+      if assorted_type:
+          final_name += (
+              f" - {assorted_type}"
+          )
+
+      if flavor_found:
+          final_name += (
+              f" - {flavor_found}"
+          )
+
+      
+      # FORMAT
+      if "mints" in base_name.lower():
+          format_found = "Mints"
+
+      elif "gums" in base_name.lower():
+          format_found = "Gums"
+
+      else:
+          format_found = "Unknown"
+
+      return pd.Series(
+      [
+          final_name,
+          format_found,
+          flavor_found
+      ]
+  )
+
+  # =========================
+  # STANDARDIZE PRODUCTS
+  # =========================
+
+  df_expanded[
+      [
+          "Corrected Product Name",
+          "Format",
+          "Flavor"
+      ]
+  ] = (
+      df_expanded[product_col]
+      .apply(correct_product_name)
+  )
+
+
+
+
+
+  # =========================
+  # REMOVE INVALID PRODUCTS
+  # =========================
+  df_expanded = df_expanded[
+      df_expanded["Corrected Product Name"]
+      .notna()
+  ]
+
+  # =========================
+  # QUANTITY AGGREGATION
+  # =========================
+  freq_df = (
+      df_expanded
+      .groupby(
+          "Corrected Product Name"
+      )
+      .size()
+      .reset_index(name="Quantity")
+  )
+
+ 
+  # =========================
+  # LOAD PRICE SHEET
+  # =========================
+
+
+
+  price_file = selected_price_sheet.get()
+  price_df = pd.read_excel(price_file)
+
+  # clean columns
+  price_df.columns = (
+      price_df.columns
+      .str.strip()
+  )
+
+  # rename columns
+  price_df = price_df.rename(
+      columns={
+          "product": "Corrected Product Name",
+          "price": "Price"
+      }
+  )
+
+  # keep required cols
+  price_df = price_df[
+      [
+          "Corrected Product Name",
+          "Price"
+      ]
+  ].drop_duplicates()
+
+  # numeric price
+  price_df["Price"] = pd.to_numeric(
+      price_df["Price"],
+      errors="coerce"
+  ).fillna(0)
+
+  # =========================
+  # MERGE PRICE
+  # =========================
+  freq_df = freq_df.merge(
+      price_df,
+      on="Corrected Product Name",
+      how="left"
+  )
+
+
+  # missing price = 0
+  freq_df["Price"] = (
+      freq_df["Price"]
+      .fillna(0)
+  )
+
+  # =========================
+  # REVENUE
+  # =========================
+  freq_df["Revenue"] = (
+      freq_df["Quantity"]
+      * freq_df["Price"]
+  )
+
+
+  # ====================================
+  # SKU MASTER WITH FORMAT + FLAVOR
+  # ====================================
+
+  mapping_df = (
+      df_expanded[
+          [
+              "Corrected Product Name",
+              "Format",
+              "Flavor"
+          ]
+      ]
+      .drop_duplicates()
+  )
+
+  print(
+      mapping_df.head()
+  )
+
+
+
+  sku_master = freq_df.merge(
+      mapping_df,
+      on="Corrected Product Name",
+      how="left"
+  )
+
+  # ====================================
+  # MINTS SUMMARY
+  # ====================================
+
+  mints_df = sku_master[
+      sku_master["Format"] == "Mints"
+  ]
+
+  mints_summary = (
+      mints_df
+      .groupby("Flavor")
+      .agg(
+          Quantity=("Quantity", "sum"),
+          Revenue=("Revenue", "sum")
+      )
+      .reset_index()
+  )
+
+  mints_summary["Qty %"] = (
+      mints_summary["Quantity"]
+      /
+      mints_summary["Quantity"].sum()
+      * 100
+  ).round(2)
+
+  mints_summary["Revenue %"] = (
+      mints_summary["Revenue"]
+      /
+      mints_summary["Revenue"].sum()
+      * 100
+  ).round(2)
+
+  # ====================================
+  # GUMS SUMMARY
+  # ====================================
+
+  gums_df = sku_master[
+      sku_master["Format"] == "Gums"
+  ]
+
+  gums_summary = (
+      gums_df
+      .groupby("Flavor")
+      .agg(
+          Quantity=("Quantity", "sum"),
+          Revenue=("Revenue", "sum")
+      )
+      .reset_index()
+  )
+
+  gums_summary["Qty %"] = (
+      gums_summary["Quantity"]
+      /
+      gums_summary["Quantity"].sum()
+      * 100
+  ).round(2)
+
+  gums_summary["Revenue %"] = (
+      gums_summary["Revenue"]
+      /
+      gums_summary["Revenue"].sum()
+      * 100
+  ).round(2)
+
+  print("\nMINTS FLAVOR SUMMARY")
+  print(mints_summary)
+
+  print("\nGUMS FLAVOR SUMMARY")
+  print(gums_summary)
+
+  # ====================================
+  # FORMAT SUMMARY
+  # ====================================
+
+  format_summary = (
+      sku_master
+      .groupby("Format")
+      .agg(
+          Quantity=("Quantity", "sum"),
+          Revenue=("Revenue", "sum")
+      )
+      .reset_index()
+  )
+
+  format_summary["Qty %"] = (
+      format_summary["Quantity"]
+      /
+      format_summary["Quantity"].sum()
+      * 100
+  ).round(2)
+
+  format_summary["Revenue %"] = (
+      format_summary["Revenue"]
+      /
+      format_summary["Revenue"].sum()
+      * 100
+  ).round(2)
+
+  print("\nFORMAT SUMMARY")
+  print(format_summary)
+
+
+
+
+  # ====================================
+# FORMAT-FLAVOR CONTRIBUTION
+# ====================================
+
+  format_flavor_df = (
+    sku_master
+    .groupby(
+        ["Format", "Flavor"]
+    )
+    .agg(
+        Quantity=("Quantity", "sum"),
+        Revenue=("Revenue", "sum")
+    )
+    .reset_index()
+)
+
+  format_flavor_df["Revenue %"] = (
+    format_flavor_df["Revenue"]
+    / format_summary["Revenue"].sum()
+    * 100
+  ).round(2)
+
+  format_flavor_df["Quantity %"] = (
+    format_flavor_df["Quantity"]
+    / format_summary["Quantity"].sum()
+    * 100
+  ).round(2)
+
+  format_flavor_df = (
+    format_flavor_df
+    .sort_values(
+        ["Format", "Revenue"],
+        ascending=[True, False]
+    )
+)
+
+
+
+
+
+# ====================================
+# FORMAT-FLAVOR PIVOT STYLE
+# ====================================
+
+  pivot_rows = []
+
+  for format_name in format_flavor_df["Format"].dropna().unique():
+
+    format_data = format_flavor_df[
+        format_flavor_df["Format"] == format_name
+    ]
+
+    # Parent Row
+    pivot_rows.append(
+        [
+            format_name,
+            round(
+                format_data["Revenue %"].sum(),
+                2
+            ),
+            round(
+                format_data["Quantity %"].sum(),
+                2
+            )
+        ]
+    )
+
+    # Child Rows
+    for _, row in format_data.iterrows():
+
+        pivot_rows.append(
+            [
+                "   " + str(row["Flavor"]),
+                row["Revenue %"],
+                row["Quantity %"]
+            ]
+        )
+
+# Grand Total
+  pivot_rows.append(
+    [
+        "Grand Total",
+        100.00,
+        100.00
+    ]
+)
+
+  format_flavor_pivot = pd.DataFrame(
+    pivot_rows,
+    columns=[
+        "Row Labels",
+        "Revenue %",
+        "Quantity %"
+    ]
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+# ====================================
+# FLAVOR-FORMAT CONTRIBUTION
+# ====================================
+
+  flavor_format_df = (
+    sku_master
+    .groupby(
+        ["Flavor", "Format"]
+    )
+    .agg(
+        Quantity=("Quantity", "sum"),
+        Revenue=("Revenue", "sum")
+    )
+    .reset_index()
+)
+
+  flavor_format_df["Revenue %"] = (
+    flavor_format_df["Revenue"]
+    / format_summary["Revenue"].sum()
+    * 100
+  ).round(2)
+
+  flavor_format_df["Quantity %"] = (
+    flavor_format_df["Quantity"]
+    / format_summary["Quantity"].sum()
+    * 100
+  ).round(2)
+  
+  flavor_format_df = (
+    flavor_format_df
+    .sort_values(
+        ["Flavor", "Revenue"],
+        ascending=[True, False]
+    )
+)
+
+
+
+
+
+
+# ====================================
+# FLAVOR-FORMAT PIVOT STYLE
+# ====================================
+
+  pivot_rows = []
+
+  for flavor_name in flavor_format_df["Flavor"].dropna().unique():
+
+    flavor_data = flavor_format_df[
+        flavor_format_df["Flavor"] == flavor_name
+    ]
+
+    # Parent Row
+    pivot_rows.append(
+        [
+            flavor_name,
+            round(
+                flavor_data["Revenue %"].sum(),
+                2
+            ),
+            round(
+                flavor_data["Quantity %"].sum(),
+                2
+            )
+        ]
+    )
+
+    # Child Rows
+    for _, row in flavor_data.iterrows():
+
+        pivot_rows.append(
+            [
+                "   " + str(row["Format"]),
+                row["Revenue %"],
+                row["Quantity %"]
+            ]
+        )
+
+# Grand Total
+  pivot_rows.append(
+    [
+        "Grand Total",
+        100.00,
+        100.00
+    ]
+)
+
+  flavor_format_pivot = pd.DataFrame(
+    pivot_rows,
+    columns=[
+        "Row Labels",
+        "Revenue %",
+        "Quantity %"
+    ]
+)
+
+
+
+
+
+  format_flavor_pivot["Revenue %"] = (
+    format_flavor_pivot["Revenue %"]
+    .astype(str)
+    + "%"
+)
+
+  format_flavor_pivot["Quantity %"] = (
+    format_flavor_pivot["Quantity %"]
+    .astype(str)
+    + "%"
+)
+
+
+
+
+
+
+
+
+
+  # =========================
+  # FINAL DENOMINATORS
+  # =========================
+
+  qty_denominator = (
+    freq_df["Quantity"]
+    .sum()
+)
+
+  rev_denominator = (
+    freq_df["Revenue"]
+    .sum()
+)
+
+
+
+
+  # =========================
+  # QUANTITY %
+  # =========================
+
+  freq_df["Quantity %"] = (
+        freq_df["Quantity"]
+        / qty_denominator
+        * 100
+  ).round(2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+    
+
+
+  # =========================
+  # REVENUE %
+  # =========================
+  freq_df["Revenue %"] = (
+      freq_df["Revenue"]
+      / rev_denominator
+      * 100
+  ).round(2)
+
+
+
+
+
+  print("\nQTY DENOMINATOR:")
+  print(qty_denominator)
+
+  print("\nREVENUE DENOMINATOR:")
+  print(rev_denominator)
+
+
+  # =========================
+  # SORT
+  # =========================
+  freq_df = (
+      freq_df
+      .sort_values(
+          "Quantity",
+          ascending=False
+      )
+      .reset_index(drop=True)
+  )
+
+  # =========================
+  # EXPORT
+  # =========================
+  output_path = os.path.join(
+    os.path.expanduser("~/Downloads"),
+    report_name.get()
+)
+
+  with pd.ExcelWriter(output_path,
+    engine="openpyxl") as writer:
+
+      # SKU Analysis
+      freq_df.to_excel(
+          writer,
+          sheet_name="SKU Analysis",
+          index=False
+      )
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+      # Mapping Table
+      mapping_df.to_excel(
+          writer,
+          sheet_name="Product Mapping",
+          index=False
+      )
+
+      format_summary.to_excel(
+          writer,
+          sheet_name="Format Summary",
+          index=False
+      )
+
+      # Mints Flavor Summary
+      mints_summary.to_excel(
+          writer,
+          sheet_name="Mints Flavor Summary",
+          index=False
+      )
+
+      # Gums Flavor Summary
+      gums_summary.to_excel(
+          writer,
+          sheet_name="Gums Flavor Summary",
+          index=False
+      )
+
+
+
+      format_flavor_df.to_excel(
+          writer,
+          sheet_name="Format-Flavor Contribution",
+          index=False
+      )
+
+      flavor_format_df.to_excel(
+          writer,
+          sheet_name="Flavor-Format Contribution",
+          index=False
+)
+
+
+
+
+
+      format_flavor_pivot.to_excel(
+          writer,
+          sheet_name="Format-Flavor Pivot",
+          index=False
+)
+
+
+      from openpyxl.styles import Font
+
+      ws = writer.sheets[
+          "Format-Flavor Pivot"
+      ]
+
+      for row in range(
+          2,
+          ws.max_row + 1
+      ):
+
+          value = str(
+              ws.cell(row,1).value
+          )
+
+          if value in [
+              "Gums",
+              "Mints",
+              "Grand Total"
+          ]:
+
+              for col in range(
+                  1,
+                  ws.max_column + 1
+              ):
+
+                  ws.cell(
+                      row,
+                      col
+                  ).font = Font(
+                      bold=True
+                  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+      flavor_format_pivot.to_excel(
+          writer,
+          sheet_name="Flavor-Format Pivot",
+          index=False
+)
+
+
+
+
+
+      ws = writer.sheets[
+      "Flavor-Format Pivot"
+      ]
+
+      for row in range(
+          2,
+          ws.max_row + 1
+      ):
+
+          value = str(
+              ws.cell(row,1).value
+          )
+
+          if value in [
+              "Cinnamon",
+              "Iced Coffee",
+              "Peppermint",
+              "Grand Total"
+          ]:
+
+              for col in range(
+                  1,
+                  ws.max_column + 1
+              ):
+
+                  ws.cell(
+                      row,
+                      col
+                  ).font = Font(
+                      bold=True
+                  )
+
+
+
+      from openpyxl.utils import get_column_letter
+
+      for ws in writer.book.worksheets:
+
+          # Auto Width
+          for column in ws.columns:
+
+              max_length = 0
+
+              column_letter = get_column_letter(
+                  column[0].column
+              )
+
+              for cell in column:
+
+                  try:
+
+                      if cell.value:
+
+                          max_length = max(
+                              max_length,
+                              len(str(cell.value))
+                          )
+
+                  except:
+                      pass
+
+              ws.column_dimensions[
+                  column_letter
+              ].width = max_length + 5
+
+          # Percentage Columns
+          for cell in ws[1]:
+
+              if str(cell.value) in [
+                  "Qty %",
+                  "Revenue %",
+                  "Quantity %",
+                  "Revenue %"
+              ]:
+
+                  for row in range(
+                      2,
+                      ws.max_row + 1
+                  ):
+
+                      ws.cell(
+                          row,
+                          cell.column
+                      ).number_format = '0.00"%"'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+  # =========================
+  # PREVIEW
+  # =========================
+  print(freq_df.to_string(index=False))
+
+  print(
+      f"\nFile saved at:\n{output_path}"
+  )
+root = tk.Tk()
+
+root.title(
+    "NeuroGum Product Intelligence Engine"
+)
+
+root.geometry(
+    "900x650"
+)
+
+selected_source_file = tk.StringVar()
+
+selected_source_file.set(
+    ""
+)
+
+
+selected_price_sheet = tk.StringVar()
+
+selected_price_sheet.set(
+    DEFAULT_PRICE_SHEET
+)
+
+def browse_price_sheet():
+
+    file_path = filedialog.askopenfilename(
+        filetypes=[
+            (
+                "Excel Files",
+                "*.xlsx *.xls"
+            )
+        ]
+    )
+
+    if file_path:
+
+        selected_price_sheet.set(
+            file_path
+        )
+def browse_source_file():
+
+    file_path = filedialog.askopenfilename(
+        filetypes=[
+            (
+                "Excel Files",
+                "*.xlsx *.xls"
+            ),
+            (
+                "CSV Files",
+                "*.csv"
+            )
+        ]
+    )
+
+    if file_path:
+
+        selected_source_file.set(
+            file_path
+        )
+
+
+
+source_label = tk.Label(
+    root,
+    text="Source File",
+    font=("Arial", 10, "bold")
+)
+
+source_label.pack(
+    pady=(15,3)
+)
+
+file_entry = tk.Entry(
+    root,
+    textvariable=selected_source_file,
+    width=80
+)
+
+file_entry.pack(
+    padx=20,
+    pady=3
+)
+
+browse_button = tk.Button(
+    root,
+    text="Browse",
+    command=browse_source_file,
+    width=12
+)
+
+browse_button.pack(
+    pady=(5,15)
+)
+
+price_label = tk.Label(
+    root,
+    text="Price Sheet",
+    font=("Arial", 10, "bold")
+)
+
+price_label.pack(
+    pady=(20,3)
+)
+
+
+price_entry = tk.Entry(
+    root,
+    textvariable=selected_price_sheet,
+    width=120
+)
+
+price_entry.pack(
+    padx=20,
+    pady=5
+)
+price_browse_button = tk.Button(
+    root,
+    text="Change Price Sheet",
+    command=browse_price_sheet,
+    width=18
+)
+
+
+price_browse_button.pack(
+    pady=(5,15)
+)
+
+
+# =========================
+# ADDITIONAL FLAVORS
+# =========================
+
+flavor_label = tk.Label(
+    root,
+    text="Additional Flavors",
+    font=("Arial", 10, "bold")
+)
+
+flavor_label.pack(
+    pady=(20,3)
+)
+
+current_flavor_label = tk.Label(
+    root,
+    text=
+    "Current Flavors: "
+    + ", ".join(
+        [
+            flavor.title()
+            for flavor in FLAVOR_MASTER
+        ]
+    ),
+    wraplength=600
+)
+
+current_flavor_label.pack(
+    pady=5
+)
+
+flavor_entry_label = tk.Label(
+    root,
+    text=
+    "Enter New Flavors (Optional)"
+)
+
+flavor_entry_label.pack(
+    pady=(10,2)
+)
+
+flavor_entry = tk.Entry(
+    root,
+    width=120
+)
+
+flavor_entry.pack(
+    padx=20,
+    pady=5
+)
+
+
+report_label = tk.Label(
+    root,
+    text="Save Generated Report As",
+    font=("Arial", 10, "bold")
+)
+
+report_label.pack(
+    pady=(20,3)
+)
+
+
+
+report_name = tk.StringVar()
+
+report_name.set(
+    "Neuro_Product_Analysis.xlsx"
+)
+
+report_entry = tk.Entry(
+    root,
+    textvariable=report_name,
+    width=120
+)
+
+report_entry.pack(
+    padx=20,
+    pady=5
+)
+output_path = os.path.join(
+    os.path.expanduser("~/Downloads"),
+    report_name.get()
+)
+
+generate_button = tk.Button(
+    root,
+    text="GENERATE REPORT",
+    width=25,
+    height=2,
+    command=generate_report
+)
+generate_button.pack(
+    pady=(20,20)
+)
+
+
+root.mainloop()
